@@ -157,6 +157,8 @@ class YoutubeVideo:
         font = cv2.FONT_HERSHEY_SIMPLEX
         cmap = matplotlib.cm.get_cmap('hsv')
         if mot_tracks is not None:
+            print(mot_tracks.shape)
+            print(len(mot_tracks))
             n_tracks = max(np.unique(mot_tracks[:, 1]))
 
         for i, basename in enumerate(tqdm(self.frame_basenames)):
@@ -227,6 +229,14 @@ class YoutubeVideo:
             if not exists(tmp_dir):
                 os.mkdir(tmp_dir)
 
+            def opencv_matrix(loader, node):
+                mapping = loader.construct_mapping(node)
+                mat = np.array(mapping["data"])
+                mat.resize(mapping["rows"], mapping["cols"])
+                return mat
+
+            yaml.add_constructor(u"tag:yaml.org,2002:opencv-matrix", opencv_matrix)
+
             for i, basename in enumerate(tqdm(self.frame_basenames)):
 
                 # Remove previous files
@@ -251,7 +261,7 @@ class YoutubeVideo:
 
                 cwd = os.getcwd()
                 os.chdir(openpose_dir)
-                command = '{0} --model_pose COCO --image_dir {1} --write_keypoint {2} --no_display'.format(openposebin,
+                command = '{0} --model_pose COCO --image_dir {1} --write_keypoint {2} --display 0 --render_pose 0'.format(openposebin,
                                                                                                            tmp_dir,
                                                                                                            tmp_dir)
 
@@ -264,22 +274,24 @@ class YoutubeVideo:
                     x1, y1 = int(np.maximum(np.minimum(x1 - pad, w - 1), 0)), int(
                         np.maximum(np.minimum(y1 - pad, h - 1), 0))
 
-                    with open(join(join(self.path_to_dataset, 'tmp'), '{0}_pose.yml'.format(j))) as data_file:
-                        for iii in range(2):
-                            _ = data_file.readline()
-                        data_yml = yaml.load(data_file)
+                    posefilepath = join(join(self.path_to_dataset, 'tmp'), '{0}_pose.yml'.format(j))
+                    if os.path.isfile(posefilepath):
+                        with open(posefilepath) as data_file:
+                            for iii in range(2):
+                                _ = data_file.readline()
+                            data_yml = yaml.load(data_file)
 
-                        if 'sizes' not in data_yml:
-                            continue
-                        sz = data_yml['sizes']
-                        n_persons = sz[0]
-                        keypoints = np.array(data_yml['data']).reshape(sz)
+                            if 'sizes' not in data_yml:
+                                continue
+                            sz = data_yml['sizes']
+                            n_persons = sz[0]
+                            keypoints = np.array(data_yml['data']).reshape(sz)
 
-                        for k in range(n_persons):
-                            keypoints_ = keypoints[k, :, :]
-                            keypoints_[:, 0] += x1
-                            keypoints_[:, 1] += y1
-                            poses.append(keypoints_)
+                            for k in range(n_persons):
+                                keypoints_ = keypoints[k, :, :]
+                                keypoints_[:, 0] += x1
+                                keypoints_[:, 1] += y1
+                                poses.append(keypoints_)
 
                 self.poses[basename] = poses
 
